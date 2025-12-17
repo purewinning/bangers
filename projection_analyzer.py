@@ -17,113 +17,120 @@ class ProjectionAnalyzer:
     
     def _preprocess(self):
         """Clean and prepare data for analysis"""
-        # Standardize columns - strip spaces and special characters
-        self.df.columns = [col.strip().replace('\xa0', ' ') for col in self.df.columns]
+        # Standardize columns - strip ALL whitespace variations and special chars
+        self.df.columns = [
+            col.strip().replace('\xa0', ' ').replace('\u00a0', ' ')
+            for col in self.df.columns
+        ]
         
-        # Enhanced column mapping for various formats
-        column_mapping = {
-            # Name variations
-            'player': 'Name',
-            'name': 'Name',
-            'player name': 'Name',
-            'playername': 'Name',
-            # Salary variations
-            'salary': 'Salary',
-            'sal': 'Salary',
-            'price': 'Salary',
-            # Projection variations
-            'projection': 'Projection',
-            'proj': 'Projection',
-            'fpts': 'Projection',
-            'points': 'Projection',
-            'avgpoints': 'Projection',
-            'avg points': 'Projection',
-            # Ownership variations - THE FIX
-            'ownership': 'Ownership',
-            'own': 'Ownership',
-            'own%': 'Ownership',
-            'ownership%': 'Ownership',
-            'ownership %': 'Ownership',
-            'own %': 'Ownership',
-            'projected ownership': 'Ownership',
-            # Position
-            'position': 'Position',
-            'pos': 'Position',
-            # Team
-            'team': 'Team',
-            'tm': 'Team',
-            # Opponent
-            'opponent': 'Opponent',
-            'opp': 'Opponent',
-            # Value (may be pre-calculated)
-            'value': 'Value',
-            'val': 'Value',
-            # Leverage (may be pre-calculated)
-            'leverage': 'Leverage',
-            'lev': 'Leverage',
-            # Optimal percentage
-            'optimal': 'Optimal',
-            'optimal%': 'Optimal',
-            'optimal %': 'Optimal',
-            # Standard deviation
-            'std dev': 'StdDev',
-            'stddev': 'StdDev',
-            'std': 'StdDev',
-            'stdev': 'StdDev',
-            'sd': 'StdDev',
-            # CPT (Captain) columns for showdown
-            'cpt ownership': 'CPT_Ownership',
-            'cpt ownership%': 'CPT_Ownership',
-            'cpt ownership %': 'CPT_Ownership',
-            'cpt own': 'CPT_Ownership',
-            'cpt own%': 'CPT_Ownership',
-            'cpt optimal': 'CPT_Optimal',
-            'cpt optimal%': 'CPT_Optimal',
-            'cpt optimal %': 'CPT_Optimal',
-            'cpt leverage': 'CPT_Leverage',
-        }
+        # Create comprehensive mapping - check each column individually
+        column_mapping = {}
         
-        # Apply column mapping - handle exact match first, then lowercase
-        renamed_cols = {}
         for col in self.df.columns:
-            # Try exact match first
-            if col in column_mapping:
-                renamed_cols[col] = column_mapping[col]
-                continue
+            col_clean = col.lower().strip()
             
-            # Try lowercase match
-            col_lower = col.lower().strip()
-            if col_lower in column_mapping:
-                renamed_cols[col] = column_mapping[col_lower]
+            # Name mappings
+            if col_clean in ['player', 'name', 'player name', 'playername']:
+                column_mapping[col] = 'Name'
+            
+            # Salary mappings
+            elif col_clean in ['salary', 'sal', 'price']:
+                column_mapping[col] = 'Salary'
+            
+            # Projection mappings
+            elif col_clean in ['projection', 'proj', 'fpts', 'points', 'avgpoints', 'avg points']:
+                column_mapping[col] = 'Projection'
+            
+            # Ownership mappings - THE CRITICAL ONE
+            elif col_clean in ['ownership', 'own', 'own%', 'own %', 'ownership%', 'ownership %', 'ownership  %', 'projected ownership']:
+                column_mapping[col] = 'Ownership'
+            
+            # Position
+            elif col_clean in ['position', 'pos']:
+                column_mapping[col] = 'Position'
+            
+            # Team
+            elif col_clean in ['team', 'tm']:
+                column_mapping[col] = 'Team'
+            
+            # Opponent
+            elif col_clean in ['opponent', 'opp']:
+                column_mapping[col] = 'Opponent'
+            
+            # Value
+            elif col_clean in ['value', 'val']:
+                column_mapping[col] = 'Value'
+            
+            # Leverage
+            elif col_clean in ['leverage', 'lev']:
+                column_mapping[col] = 'Leverage'
+            
+            # Optimal
+            elif col_clean in ['optimal', 'optimal%', 'optimal %', 'optimal  %']:
+                column_mapping[col] = 'Optimal'
+            
+            # Std Dev
+            elif col_clean in ['std dev', 'stddev', 'std', 'stdev', 'sd']:
+                column_mapping[col] = 'StdDev'
+            
+            # CPT columns
+            elif col_clean in ['cpt ownership', 'cpt ownership%', 'cpt ownership %', 'cpt own', 'cpt own%']:
+                column_mapping[col] = 'CPT_Ownership'
+            elif col_clean in ['cpt optimal', 'cpt optimal%', 'cpt optimal %']:
+                column_mapping[col] = 'CPT_Optimal'
+            elif col_clean in ['cpt leverage']:
+                column_mapping[col] = 'CPT_Leverage'
         
-        self.df.rename(columns=renamed_cols, inplace=True)
+        # Apply the mapping
+        if column_mapping:
+            self.df.rename(columns=column_mapping, inplace=True)
         
         # Check for required columns
         required_cols = ['Salary', 'Projection', 'Ownership']
         missing_cols = [col for col in required_cols if col not in self.df.columns]
         
-        # Debug: Show what we have
+        # If still missing, show helpful error
         if missing_cols:
             available_cols = list(self.df.columns)
-            raise ValueError(
+            
+            # Try to find similar columns
+            similar = []
+            for req in missing_cols:
+                for col in available_cols:
+                    if req.lower() in col.lower() or col.lower() in req.lower():
+                        similar.append(f"  • Found similar: '{col}' (might be '{req}')")
+            
+            error_msg = (
                 f"❌ Missing required columns: {', '.join(missing_cols)}\n\n"
                 f"Your CSV must include:\n"
-                f"- Salary (or 'Price', 'Sal')\n"
-                f"- Projection (or 'Proj', 'FPTS', 'Points')\n"
-                f"- Ownership (or 'Own', 'Own %', 'Ownership %')\n\n"
-                f"📋 Columns found in your file:\n" +
-                "\n".join(f"  • {col}" for col in available_cols[:20]) +
-                (f"\n  ... and {len(available_cols) - 20} more" if len(available_cols) > 20 else "")
+                f"  • Salary (or 'Price', 'Sal')\n"
+                f"  • Projection (or 'Proj', 'FPTS', 'Points')\n"
+                f"  • Ownership (or 'Own', 'Own %', 'Ownership %')\n\n"
+                f"📋 Columns found in your file:\n"
             )
+            
+            for i, col in enumerate(available_cols[:15], 1):
+                # Show with quotes to see exact spacing
+                error_msg += f"  {i}. '{col}'\n"
+            
+            if len(available_cols) > 15:
+                error_msg += f"  ... and {len(available_cols) - 15} more\n"
+            
+            if similar:
+                error_msg += "\n🔍 Possible matches:\n" + "\n".join(similar) + "\n"
+            
+            error_msg += "\n💡 Tip: Check for extra spaces in column names (e.g., 'Ownership ' vs 'Ownership')"
+            
+            raise ValueError(error_msg)
         
-        # Ensure Name column exists (required for display)
+        # Ensure Name column exists
         if 'Name' not in self.df.columns:
             if 'Player' in self.df.columns:
                 self.df.rename(columns={'Player': 'Name'}, inplace=True)
             else:
-                raise ValueError("❌ Missing 'Name' or 'Player' column\n\nYour CSV must have a player name column.")
+                raise ValueError("❌ Missing 'Name' or 'Player' column")
         
-        # Ensure numeric types for all numeric columns
+        # Ensure numeric types
         numeric_cols = ['Salary', 'Projection', 'Ownership']
         optional_numeric = ['Value', 'Leverage', 'Optimal', 'StdDev', 
                            'CPT_Ownership', 'CPT_Optimal', 'CPT_Leverage']
@@ -143,7 +150,6 @@ class ProjectionAnalyzer:
             self.df['Leverage'] = self.df['Projection'] / (self.df['Ownership'] + 0.1)
         
         if 'Ceiling' not in self.df.columns or self.df['Ceiling'].isna().all():
-            # Use StdDev if available, otherwise use multiplier
             if 'StdDev' in self.df.columns and not self.df['StdDev'].isna().all():
                 self.df['Ceiling'] = self.df['Projection'] + (1.5 * self.df['StdDev'])
             else:
