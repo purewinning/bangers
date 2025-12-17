@@ -18,6 +18,46 @@ class ProjectionAnalyzer:
         # Standardize columns
         self.df.columns = [col.strip() for col in self.df.columns]
         
+        # Check for required columns
+        required_cols = ['Salary', 'Projection', 'Ownership']
+        missing_cols = [col for col in required_cols if col not in self.df.columns]
+        
+        if missing_cols:
+            # Try common variations
+            column_mapping = {
+                'salary': 'Salary',
+                'sal': 'Salary',
+                'price': 'Salary',
+                'projection': 'Projection',
+                'proj': 'Projection',
+                'fpts': 'Projection',
+                'points': 'Projection',
+                'ownership': 'Ownership',
+                'own': 'Ownership',
+                'own%': 'Ownership',
+                'ownership%': 'Ownership'
+            }
+            
+            # Try to map columns
+            for col in self.df.columns:
+                col_lower = col.lower().strip()
+                if col_lower in column_mapping:
+                    standard_name = column_mapping[col_lower]
+                    if standard_name in missing_cols:
+                        self.df.rename(columns={col: standard_name}, inplace=True)
+                        missing_cols.remove(standard_name)
+        
+        # Check again after mapping
+        if missing_cols:
+            raise ValueError(
+                f"Missing required columns: {', '.join(missing_cols)}\n\n"
+                f"Your CSV must include:\n"
+                f"- Salary (or 'Price', 'Sal')\n"
+                f"- Projection (or 'Proj', 'FPTS', 'Points')\n"
+                f"- Ownership (or 'Own', 'Own%')\n\n"
+                f"Columns found: {', '.join(self.df.columns)}"
+            )
+        
         # Ensure numeric types
         numeric_cols = ['Salary', 'Projection', 'Ownership']
         for col in numeric_cols:
