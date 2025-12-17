@@ -4,6 +4,19 @@ import numpy as np
 from itertools import combinations
 import json
 from datetime import datetime
+import importlib
+import sys
+
+# STREAMLIT CLOUD FIX: Force reload modules to bypass cache
+if 'projection_analyzer' in sys.modules:
+    importlib.reload(sys.modules['projection_analyzer'])
+if 'lineup_builder' in sys.modules:
+    importlib.reload(sys.modules['lineup_builder'])
+if 'showdown_builder' in sys.modules:
+    importlib.reload(sys.modules['showdown_builder'])
+if 'strategy_engine' in sys.modules:
+    importlib.reload(sys.modules['strategy_engine'])
+
 from lineup_builder import LineupBuilder
 from showdown_builder import ShowdownLineupBuilder
 from strategy_engine import StrategyEngine
@@ -56,6 +69,13 @@ st.markdown('<div class="sub-header">Single-Entry Tournament Strategies for High
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
+    
+    # Version info for debugging
+    try:
+        from projection_analyzer import __version__ as pa_version
+        st.caption(f"🔧 Analyzer v{pa_version}")
+    except:
+        st.caption("🔧 Analyzer v1.0")
     
     sport = st.selectbox("Sport", ["NFL", "NBA"])
     
