@@ -100,120 +100,142 @@ with st.sidebar:
 
 # Main content
 if uploaded_file is not None:
-    # Load and analyze projections
-    df = pd.read_csv(uploaded_file)
-    
-    analyzer = ProjectionAnalyzer(df, sport)
-    analysis = analyzer.analyze()
-    
-    # Display key metrics
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Players Available", len(df))
-    with col2:
-        st.metric("Avg Proj. Own%", f"{analysis['avg_ownership']:.1f}%")
-    with col3:
-        st.metric("Value Plays", analysis['value_count'])
-    with col4:
-        st.metric("Leverage Opps", analysis['leverage_count'])
-    
-    # Strategy explanation
-    st.subheader(f"📊 {strategy} Strategy")
-    strategy_engine = StrategyEngine(sport)
-    strategy_info = strategy_engine.get_strategy_info(strategy)
-    
-    st.info(strategy_info['description'])
-    
-    with st.expander("Strategy Details"):
-        st.markdown(f"**Core Philosophy:** {strategy_info['philosophy']}")
-        st.markdown(f"**Key Principles:**")
-        for principle in strategy_info['principles']:
-            st.markdown(f"- {principle}")
-    
-    # Build lineups
-    if st.button("🚀 Generate Optimal Lineups", type="primary"):
-        with st.spinner("Building tournament-winning lineups..."):
-            
-            builder = LineupBuilder(
-                df=df,
-                sport=sport,
-                strategy=strategy,
-                ownership_weight=ownership_weight,
-                correlation_focus=correlation_focus,
-                leverage_target=leverage_target,
-                min_salary=min_salary
-            )
-            
-            lineups = builder.build_lineups(num_lineups)
-            
-            # Display lineups
-            st.subheader("🏆 Optimized Lineups")
-            
-            for idx, lineup in enumerate(lineups, 1):
-                with st.expander(f"Lineup {idx} - Projection: {lineup['projection']:.2f} | Salary: ${lineup['salary']:,} | Ownership: {lineup['avg_ownership']:.1f}%", expanded=(idx==1)):
-                    
-                    lineup_df = pd.DataFrame(lineup['players'])
-                    
-                    # Format the display
-                    display_cols = ['Name', 'Position', 'Team', 'Salary', 'Projection', 'Ownership%', 'Value', 'Leverage']
-                    
-                    if sport == "NFL":
-                        display_cols.append('Game')
-                    
-                    st.dataframe(
-                        lineup_df[display_cols],
-                        use_container_width=True,
-                        hide_index=True
+    try:
+        # Load and analyze projections
+        df = pd.read_csv(uploaded_file)
+        
+        # Show columns found
+        st.sidebar.success(f"✓ File loaded: {len(df)} players")
+        
+        with st.sidebar.expander("📋 Columns Detected"):
+            st.write(", ".join(df.columns))
+        
+        analyzer = ProjectionAnalyzer(df, sport)
+        analysis = analyzer.analyze()
+        
+        # Display key metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Players Available", len(df))
+        with col2:
+            st.metric("Avg Proj. Own%", f"{analysis['avg_ownership']:.1f}%")
+        with col3:
+            st.metric("Value Plays", analysis['value_count'])
+        with col4:
+            st.metric("Leverage Opps", analysis['leverage_count'])
+        
+        # Strategy explanation
+        st.subheader(f"📊 {strategy} Strategy")
+        strategy_engine = StrategyEngine(sport)
+        strategy_info = strategy_engine.get_strategy_info(strategy)
+        
+        st.info(strategy_info['description'])
+        
+        with st.expander("Strategy Details"):
+            st.markdown(f"**Core Philosophy:** {strategy_info['philosophy']}")
+            st.markdown(f"**Key Principles:**")
+            for principle in strategy_info['principles']:
+                st.markdown(f"- {principle}")
+        
+        # Build lineups
+        if st.button("🚀 Generate Optimal Lineups", type="primary"):
+            with st.spinner("Building tournament-winning lineups..."):
+                
+                builder = LineupBuilder(
+                    df=df,
+                    sport=sport,
+                    strategy=strategy,
+                    ownership_weight=ownership_weight,
+                    correlation_focus=correlation_focus,
+                    leverage_target=leverage_target,
+                    min_salary=min_salary
+                )
+                
+                lineups = builder.build_lineups(num_lineups)
+                
+                # Display lineups
+                st.subheader("🏆 Optimized Lineups")
+                
+                for idx, lineup in enumerate(lineups, 1):
+                    with st.expander(f"Lineup {idx} - Projection: {lineup['projection']:.2f} | Salary: ${lineup['salary']:,} | Ownership: {lineup['avg_ownership']:.1f}%", expanded=(idx==1)):
+                        
+                        lineup_df = pd.DataFrame(lineup['players'])
+                        
+                        # Format the display
+                        display_cols = ['Name', 'Position', 'Team', 'Salary', 'Projection', 'Ownership', 'Value', 'Leverage']
+                        
+                        if sport == "NFL":
+                            if 'Game' in lineup_df.columns:
+                                display_cols.append('Game')
+                        
+                        # Only show columns that exist
+                        available_cols = [col for col in display_cols if col in lineup_df.columns]
+                        
+                        st.dataframe(
+                            lineup_df[available_cols],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Lineup analytics
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("Total Leverage", f"{lineup['total_leverage']:.2f}")
+                            st.caption("Target: 0.8-1.2 for single-entry")
+                        
+                        with col2:
+                            st.metric("Ceiling Score", f"{lineup['ceiling']:.1f}")
+                            st.caption("90th percentile projection")
+                        
+                        with col3:
+                            st.metric("Stack Quality", lineup['stack_rating'])
+                            st.caption("Correlation strength")
+                        
+                        # Build construction notes
+                        st.markdown("**Build Notes:**")
+                        for note in lineup['construction_notes']:
+                            st.markdown(f"- {note}")
+                        
+                        # Edge identification
+                        if lineup['edge_plays']:
+                            st.markdown("**🎯 Edge Plays:**")
+                            for edge in lineup['edge_plays']:
+                                st.markdown(f'<span class="edge-indicator">{edge}</span>', unsafe_allow_html=True)
+                
+                # Export functionality
+                st.subheader("💾 Export Lineups")
+                
+                export_format = st.radio("Format", ["DraftKings CSV", "JSON Analysis"])
+                
+                if export_format == "DraftKings CSV":
+                    csv_data = builder.export_for_dk(lineups)
+                    st.download_button(
+                        "Download DK CSV",
+                        csv_data,
+                        "dk_lineups.csv",
+                        "text/csv"
                     )
-                    
-                    # Lineup analytics
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.metric("Total Leverage", f"{lineup['total_leverage']:.2f}")
-                        st.caption("Target: 0.8-1.2 for single-entry")
-                    
-                    with col2:
-                        st.metric("Ceiling Score", f"{lineup['ceiling']:.1f}")
-                        st.caption("90th percentile projection")
-                    
-                    with col3:
-                        st.metric("Stack Quality", lineup['stack_rating'])
-                        st.caption("Correlation strength")
-                    
-                    # Build construction notes
-                    st.markdown("**Build Notes:**")
-                    for note in lineup['construction_notes']:
-                        st.markdown(f"- {note}")
-                    
-                    # Edge identification
-                    if lineup['edge_plays']:
-                        st.markdown("**🎯 Edge Plays:**")
-                        for edge in lineup['edge_plays']:
-                            st.markdown(f'<span class="edge-indicator">{edge}</span>', unsafe_allow_html=True)
-            
-            # Export functionality
-            st.subheader("💾 Export Lineups")
-            
-            export_format = st.radio("Format", ["DraftKings CSV", "JSON Analysis"])
-            
-            if export_format == "DraftKings CSV":
-                csv_data = builder.export_for_dk(lineups)
-                st.download_button(
-                    "Download DK CSV",
-                    csv_data,
-                    "dk_lineups.csv",
-                    "text/csv"
-                )
-            else:
-                json_data = json.dumps(lineups, indent=2)
-                st.download_button(
-                    "Download Analysis JSON",
-                    json_data,
-                    "lineup_analysis.json",
-                    "application/json"
-                )
+                else:
+                    json_data = json.dumps(lineups, indent=2)
+                    st.download_button(
+                        "Download Analysis JSON",
+                        json_data,
+                        "lineup_analysis.json",
+                        "application/json"
+                    )
+    
+    except ValueError as e:
+        st.error(f"❌ **CSV Format Error**\n\n{str(e)}")
+        st.info("💡 **Quick Fix:** Make sure your CSV has these columns:\n- Name\n- Position\n- Team\n- Salary (or Price)\n- Projection (or FPTS)\n- Ownership (or Own%)")
+    
+    except Exception as e:
+        st.error(f"❌ **Error Processing File**\n\n{str(e)}")
+        st.info("💡 **Troubleshooting:**\n1. Check that your CSV is properly formatted\n2. Ensure all required columns are present\n3. Try the sample file first to test")
+        
+        with st.expander("🔍 Debug Info"):
+            st.code(str(e))
 
 else:
     # Landing page
