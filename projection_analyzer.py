@@ -1,11 +1,19 @@
+# projection_analyzer.py - Version 1.3.1 - STREAMLIT CLOUD FIX
+# Force reload by changing version number
+
 import pandas as pd
 import numpy as np
 from typing import Dict, List
+
+# VERSION STAMP - increment this to force reload on Streamlit Cloud
+__version__ = "1.3.1"
 
 class ProjectionAnalyzer:
     """
     Analyzes projection data to identify edges and opportunities.
     Helps understand the slate dynamics before building lineups.
+    
+    Version 1.3.1 - Ownership column fix for Streamlit Cloud
     """
     
     def __init__(self, df: pd.DataFrame, sport: str, contest_type: str = None):
@@ -16,14 +24,22 @@ class ProjectionAnalyzer:
         self._detect_contest_type()
     
     def _preprocess(self):
-        """Clean and prepare data for analysis"""
-        # Standardize columns - strip ALL whitespace variations and special chars
+        """Clean and prepare data for analysis - FIXED for 'Ownership %' """
+        
+        # STREAMLIT CLOUD FIX: Aggressive column cleaning
+        # Strip ALL whitespace variations, unicode chars, and special chars
         self.df.columns = [
-            col.strip().replace('\xa0', ' ').replace('\u00a0', ' ')
+            str(col).strip()
+                    .replace('\xa0', ' ')      # Non-breaking space
+                    .replace('\u00a0', ' ')    # Unicode non-breaking space  
+                    .replace('\u202f', ' ')    # Narrow non-breaking space
+                    .replace('\t', ' ')         # Tabs
+                    .strip()                    # Strip again after replacements
             for col in self.df.columns
         ]
         
-        # Create comprehensive mapping - check each column individually
+        # CRITICAL FIX: Map columns using if/elif chain instead of dict
+        # This catches "Ownership %" with the space!
         column_mapping = {}
         
         for col in self.df.columns:
@@ -41,8 +57,8 @@ class ProjectionAnalyzer:
             elif col_clean in ['projection', 'proj', 'fpts', 'points', 'avgpoints', 'avg points']:
                 column_mapping[col] = 'Projection'
             
-            # Ownership mappings - THE CRITICAL ONE
-            elif col_clean in ['ownership', 'own', 'own%', 'own %', 'ownership%', 'ownership %', 'ownership  %', 'projected ownership']:
+            # OWNERSHIP MAPPINGS - THE CRITICAL FIX
+            elif col_clean in ['ownership', 'own', 'own%', 'own %', 'ownership%', 'ownership %', 'ownership  %', 'projected ownership', 'proj own']:
                 column_mapping[col] = 'Ownership'
             
             # Position
@@ -73,7 +89,7 @@ class ProjectionAnalyzer:
             elif col_clean in ['std dev', 'stddev', 'std', 'stdev', 'sd']:
                 column_mapping[col] = 'StdDev'
             
-            # CPT columns
+            # CPT columns (showdown)
             elif col_clean in ['cpt ownership', 'cpt ownership%', 'cpt ownership %', 'cpt own', 'cpt own%']:
                 column_mapping[col] = 'CPT_Ownership'
             elif col_clean in ['cpt optimal', 'cpt optimal%', 'cpt optimal %']:
@@ -93,13 +109,6 @@ class ProjectionAnalyzer:
         if missing_cols:
             available_cols = list(self.df.columns)
             
-            # Try to find similar columns
-            similar = []
-            for req in missing_cols:
-                for col in available_cols:
-                    if req.lower() in col.lower() or col.lower() in req.lower():
-                        similar.append(f"  • Found similar: '{col}' (might be '{req}')")
-            
             error_msg = (
                 f"❌ Missing required columns: {', '.join(missing_cols)}\n\n"
                 f"Your CSV must include:\n"
@@ -110,16 +119,12 @@ class ProjectionAnalyzer:
             )
             
             for i, col in enumerate(available_cols[:15], 1):
-                # Show with quotes to see exact spacing
                 error_msg += f"  {i}. '{col}'\n"
             
             if len(available_cols) > 15:
                 error_msg += f"  ... and {len(available_cols) - 15} more\n"
             
-            if similar:
-                error_msg += "\n🔍 Possible matches:\n" + "\n".join(similar) + "\n"
-            
-            error_msg += "\n💡 Tip: Check for extra spaces in column names (e.g., 'Ownership ' vs 'Ownership')"
+            error_msg += f"\n💡 Version: {__version__}"
             
             raise ValueError(error_msg)
         
@@ -161,7 +166,7 @@ class ProjectionAnalyzer:
             return  # Already set
         
         # Check for CPT columns
-        has_cpt_columns = any('CPT' in col for col in self.df.columns)
+        has_cpt_columns = any('CPT' in str(col) for col in self.df.columns)
         
         # Check for captain positions
         if 'Position' in self.df.columns:
@@ -217,7 +222,6 @@ class ProjectionAnalyzer:
     
     def _identify_leverage_opportunities(self) -> List[Dict]:
         """Find best leverage plays"""
-        # High projection, lower ownership
         leverage = self.df[
             (self.df['Leverage'] > 1.3) &
             (self.df['Projection'] > self.df['Projection'].quantile(0.6))
@@ -235,8 +239,7 @@ class ProjectionAnalyzer:
         return value[['Name', 'Position', 'Team', 'Salary', 'Projection', 'Ownership', 'Value']].to_dict('records')
     
     def _identify_contrarian_targets(self) -> List[Dict]:
-        """Find smart contrarian plays (low owned but with upside)"""
-        # Low ownership but reasonable projection
+        """Find smart contrarian plays"""
         contrarian = self.df[
             (self.df['Ownership'] < 10) &
             (self.df['Projection'] > self.df['Projection'].quantile(0.5))
@@ -253,7 +256,7 @@ class ProjectionAnalyzer:
         if 'Position' in self.df.columns:
             for pos in self.df['Position'].unique():
                 if pd.notna(pos):
-                    pos_df = self.df[self.df['Position'].str.contains(pos, na=False)]
+                    pos_df = self.df[self.df['Position'].str.contains(str(pos), na=False)]
                     
                     if not pos_df.empty:
                         distribution[pos] = {
@@ -266,7 +269,7 @@ class ProjectionAnalyzer:
         return distribution
     
     def _analyze_ownership_distribution(self) -> Dict:
-        """Analyze ownership distribution across the slate"""
+        """Analyze ownership distribution"""
         return {
             'chalk_count': len(self.df[self.df['Ownership'] > 25]),
             'medium_count': len(self.df[(self.df['Ownership'] >= 10) & (self.df['Ownership'] <= 25)]),
@@ -285,21 +288,16 @@ class ProjectionAnalyzer:
         stacks = {}
         
         if 'Game' not in self.df.columns:
-            return {"message": "Game information not available for stack analysis"}
+            return {"message": "Game information not available"}
         
-        # Group by game
         games = self.df['Game'].dropna().unique()
         
         for game in games:
             game_players = self.df[self.df['Game'] == game]
-            
-            # Find QBs in the game
             qbs = game_players[game_players['Position'].str.contains('QB', na=False)]
             
             for _, qb in qbs.iterrows():
                 qb_team = qb['Team']
-                
-                # Find pass catchers on same team
                 pass_catchers = game_players[
                     (game_players['Team'] == qb_team) &
                     (game_players['Position'].str.contains('WR|TE', na=False))
@@ -321,7 +319,7 @@ class ProjectionAnalyzer:
         return stacks
     
     def _analyze_nba_stacks(self) -> Dict:
-        """Analyze NBA team stacking opportunities"""
+        """Analyze NBA team stacking"""
         if 'Team' not in self.df.columns:
             return {"message": "Team information not available"}
         
@@ -330,8 +328,6 @@ class ProjectionAnalyzer:
         for team in self.df['Team'].unique():
             if pd.notna(team):
                 team_players = self.df[self.df['Team'] == team]
-                
-                # Top 3 projected players from team
                 top_players = team_players.nlargest(3, 'Projection')
                 
                 team_stacks[team] = {
@@ -342,98 +338,8 @@ class ProjectionAnalyzer:
                     'top_players': top_players[['Name', 'Position', 'Projection', 'Ownership']].to_dict('records')
                 }
         
-        # Sort by top 3 projection
         team_stacks = dict(sorted(team_stacks.items(), 
                                   key=lambda x: x[1]['top_3_proj'], 
                                   reverse=True))
         
         return team_stacks
-    
-    def get_correlation_matrix(self) -> pd.DataFrame:
-        """
-        Build correlation matrix for players.
-        In production, this would use historical data.
-        """
-        # Simplified placeholder
-        if self.sport == "NFL":
-            return self._nfl_correlation_matrix()
-        else:
-            return self._nba_correlation_matrix()
-    
-    def _nfl_correlation_matrix(self) -> pd.DataFrame:
-        """NFL position correlations"""
-        # These are theoretical correlations
-        correlations = {
-            'QB-WR (same team)': 0.65,
-            'QB-TE (same team)': 0.55,
-            'QB-RB (same team)': -0.15,
-            'RB-DST (same team)': -0.30,
-            'WR-WR (same team)': -0.10,
-            'Opposing skill positions': 0.20
-        }
-        
-        return pd.DataFrame(list(correlations.items()), 
-                          columns=['Relationship', 'Correlation'])
-    
-    def _nba_correlation_matrix(self) -> pd.DataFrame:
-        """NBA position correlations"""
-        correlations = {
-            'Teammates (general)': 0.15,
-            'PG-SG (same team)': 0.25,
-            'Opposing stars': 0.30,
-            'Blowout scenarios': -0.40
-        }
-        
-        return pd.DataFrame(list(correlations.items()),
-                          columns=['Relationship', 'Correlation'])
-    
-    def generate_slate_report(self) -> str:
-        """Generate a text report of slate analysis"""
-        analysis = self.analyze()
-        
-        report = f"""
-╔═══════════════════════════════════════════════════════════════╗
-║                    SLATE ANALYSIS REPORT                       ║
-╚═══════════════════════════════════════════════════════════════╝
-
-OVERVIEW
---------
-Total Players: {analysis['total_players']}
-Average Ownership: {analysis['avg_ownership']:.1f}%
-Value Plays Available: {analysis['value_count']}
-Leverage Opportunities: {analysis['leverage_count']}
-
-CHALK PLAYS (>25% Ownership)
------------------------------
-"""
-        
-        for player in analysis['chalk_plays'][:5]:
-            report += f"  • {player['Name']} ({player['Position']}) - {player['Ownership']:.1f}% @ ${player['Salary']:,}\n"
-        
-        report += f"""
-LEVERAGE OPPORTUNITIES
-----------------------
-"""
-        
-        for player in analysis['leverage_opportunities'][:5]:
-            report += f"  • {player['Name']} - Proj: {player['Projection']:.1f} / Own: {player['Ownership']:.1f}% (Leverage: {player['Leverage']:.2f})\n"
-        
-        report += f"""
-OWNERSHIP DISTRIBUTION
----------------------
-Chalk (>25%): {analysis['ownership_distribution']['chalk_count']} players
-Medium (10-25%): {analysis['ownership_distribution']['medium_count']} players
-Low (<10%): {analysis['ownership_distribution']['low_count']} players
-
-STRATEGY RECOMMENDATIONS
------------------------
-"""
-        
-        if analysis['avg_ownership'] > 15:
-            report += "  ⚠️  High average ownership - consider contrarian core strategy\n"
-        if analysis['leverage_count'] > 20:
-            report += "  ✓  Multiple leverage opportunities - leverage play strategy recommended\n"
-        if len(analysis['chalk_plays']) > 10:
-            report += "  ⚠️  Chalky slate - differentiation will be key\n"
-        
-        return report
