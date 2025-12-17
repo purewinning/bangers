@@ -1,0 +1,15 @@
+Player,Salary,Position,Team,Opponent,Projection,Value,Ownership %,Optimal %,Leverage,CPT Ownership %,CPT Optimal %,CPT Leverage,Std Dev
+Patrick Mahomes,11400,QB,KC,BUF,23.5,2.06,32.5,28.3,0.72,45.2,38.1,0.78,6.2
+Josh Allen,11200,QB,BUF,KC,22.8,2.04,35.8,31.2,0.64,48.5,42.3,0.71,6.5
+Travis Kelce,9800,TE,KC,BUF,16.2,1.65,28.3,24.7,0.57,38.7,32.4,0.63,4.8
+Stefon Diggs,9400,WR,BUF,KC,15.8,1.68,22.4,19.8,0.71,30.2,26.1,0.79,5.1
+Tyreek Hill,8800,WR,KC,BUF,14.5,1.65,18.7,16.3,0.78,25.3,21.7,0.86,4.9
+James Cook,7600,RB,BUF,KC,12.8,1.68,15.2,13.4,0.84,20.8,18.2,0.92,4.2
+Isiah Pacheco,7200,RB,KC,BUF,11.9,1.65,12.3,10.8,0.97,16.7,14.5,1.07,4.0
+Rashee Rice,6400,WR,KC,BUF,10.2,1.59,8.5,7.2,1.20,11.8,9.8,1.29,3.8
+Khalil Shakir,5800,WR,BUF,KC,9.1,1.57,6.8,5.9,1.34,9.2,7.8,1.39,3.5
+Noah Gray,5200,TE,KC,BUF,7.8,1.50,5.2,4.5,1.50,7.1,6.1,1.64,3.2
+Dawson Knox,4800,TE,BUF,KC,6.9,1.44,4.8,4.1,1.44,6.5,5.5,1.59,3.0
+Kadarius Toney,4400,WR,KC,BUF,6.2,1.41,3.9,3.3,1.59,5.3,4.4,1.75,2.8
+Dalton Kincaid,4200,TE,BUF,KC,5.8,1.38,3.5,3.0,1.66,4.7,4.0,1.85,2.7
+Skyy Moore,4000,WR,KC,BUF,5.2,1.30,2.8,2.4,1.86,3.8,3.2,2.05,2.5

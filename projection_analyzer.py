@@ -8,44 +8,82 @@ class ProjectionAnalyzer:
     Helps understand the slate dynamics before building lineups.
     """
     
-    def __init__(self, df: pd.DataFrame, sport: str):
+    def __init__(self, df: pd.DataFrame, sport: str, contest_type: str = None):
         self.df = df.copy()
         self.sport = sport
+        self.contest_type = contest_type  # 'classic' or 'showdown'
         self._preprocess()
+        self._detect_contest_type()
     
     def _preprocess(self):
         """Clean and prepare data for analysis"""
         # Standardize columns
         self.df.columns = [col.strip() for col in self.df.columns]
         
+        # Enhanced column mapping for various formats
+        column_mapping = {
+            # Name variations
+            'player': 'Name',
+            'name': 'Name',
+            'player name': 'Name',
+            # Salary variations
+            'salary': 'Salary',
+            'sal': 'Salary',
+            'price': 'Salary',
+            # Projection variations
+            'projection': 'Projection',
+            'proj': 'Projection',
+            'fpts': 'Projection',
+            'points': 'Projection',
+            # Ownership variations
+            'ownership': 'Ownership',
+            'own': 'Ownership',
+            'own%': 'Ownership',
+            'ownership%': 'Ownership',
+            'ownership %': 'Ownership',
+            # Position
+            'position': 'Position',
+            'pos': 'Position',
+            # Team
+            'team': 'Team',
+            'tm': 'Team',
+            # Opponent
+            'opponent': 'Opponent',
+            'opp': 'Opponent',
+            # Value (may be pre-calculated)
+            'value': 'Value',
+            'val': 'Value',
+            # Leverage (may be pre-calculated)
+            'leverage': 'Leverage',
+            'lev': 'Leverage',
+            # Optimal percentage
+            'optimal': 'Optimal',
+            'optimal%': 'Optimal',
+            'optimal %': 'Optimal',
+            # Standard deviation
+            'std dev': 'StdDev',
+            'stddev': 'StdDev',
+            'std': 'StdDev',
+            'stdev': 'StdDev',
+            # CPT (Captain) columns for showdown
+            'cpt ownership': 'CPT_Ownership',
+            'cpt ownership%': 'CPT_Ownership',
+            'cpt ownership %': 'CPT_Ownership',
+            'cpt optimal': 'CPT_Optimal',
+            'cpt optimal%': 'CPT_Optimal',
+            'cpt optimal %': 'CPT_Optimal',
+            'cpt leverage': 'CPT_Leverage',
+        }
+        
+        # Apply column mapping
+        for col in self.df.columns:
+            col_lower = col.lower().strip()
+            if col_lower in column_mapping:
+                self.df.rename(columns={col: column_mapping[col_lower]}, inplace=True)
+        
         # Check for required columns
         required_cols = ['Salary', 'Projection', 'Ownership']
         missing_cols = [col for col in required_cols if col not in self.df.columns]
-        
-        if missing_cols:
-            # Try common variations
-            column_mapping = {
-                'salary': 'Salary',
-                'sal': 'Salary',
-                'price': 'Salary',
-                'projection': 'Projection',
-                'proj': 'Projection',
-                'fpts': 'Projection',
-                'points': 'Projection',
-                'ownership': 'Ownership',
-                'own': 'Ownership',
-                'own%': 'Ownership',
-                'ownership%': 'Ownership'
-            }
-            
-            # Try to map columns
-            for col in self.df.columns:
-                col_lower = col.lower().strip()
-                if col_lower in column_mapping:
-                    standard_name = column_mapping[col_lower]
-                    if standard_name in missing_cols:
-                        self.df.rename(columns={col: standard_name}, inplace=True)
-                        missing_cols.remove(standard_name)
         
         # Check again after mapping
         if missing_cols:
@@ -54,23 +92,60 @@ class ProjectionAnalyzer:
                 f"Your CSV must include:\n"
                 f"- Salary (or 'Price', 'Sal')\n"
                 f"- Projection (or 'Proj', 'FPTS', 'Points')\n"
-                f"- Ownership (or 'Own', 'Own%')\n\n"
+                f"- Ownership (or 'Own', 'Ownership %')\n\n"
                 f"Columns found: {', '.join(self.df.columns)}"
             )
         
-        # Ensure numeric types
+        # Ensure Name column exists (required for display)
+        if 'Name' not in self.df.columns and 'Player' in self.df.columns:
+            self.df.rename(columns={'Player': 'Name'}, inplace=True)
+        elif 'Name' not in self.df.columns:
+            raise ValueError("Missing 'Name' or 'Player' column")
+        
+        # Ensure numeric types for all numeric columns
         numeric_cols = ['Salary', 'Projection', 'Ownership']
-        for col in numeric_cols:
+        optional_numeric = ['Value', 'Leverage', 'Optimal', 'StdDev', 
+                           'CPT_Ownership', 'CPT_Optimal', 'CPT_Leverage']
+        
+        for col in numeric_cols + optional_numeric:
             if col in self.df.columns:
                 self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
         
         # Remove invalid rows
         self.df = self.df.dropna(subset=['Salary', 'Projection', 'Ownership'])
         
-        # Calculate metrics
-        self.df['Value'] = self.df['Projection'] / (self.df['Salary'] / 1000)
-        self.df['Leverage'] = self.df['Projection'] / (self.df['Ownership'] + 0.1)
-        self.df['Ceiling'] = self.df['Projection'] * 1.3
+        # Calculate metrics if not provided
+        if 'Value' not in self.df.columns:
+            self.df['Value'] = self.df['Projection'] / (self.df['Salary'] / 1000)
+        
+        if 'Leverage' not in self.df.columns:
+            self.df['Leverage'] = self.df['Projection'] / (self.df['Ownership'] + 0.1)
+        
+        if 'Ceiling' not in self.df.columns:
+            # Use StdDev if available, otherwise use multiplier
+            if 'StdDev' in self.df.columns:
+                self.df['Ceiling'] = self.df['Projection'] + (1.5 * self.df['StdDev'])
+            else:
+                self.df['Ceiling'] = self.df['Projection'] * 1.3
+    
+    def _detect_contest_type(self):
+        """Detect if this is a showdown or classic contest"""
+        if self.contest_type:
+            return  # Already set
+        
+        # Check for CPT columns
+        has_cpt_columns = any('CPT' in col for col in self.df.columns)
+        
+        # Check for captain positions
+        if 'Position' in self.df.columns:
+            has_cpt_position = self.df['Position'].str.contains('CPT|CAPTAIN', case=False, na=False).any()
+        else:
+            has_cpt_position = False
+        
+        if has_cpt_columns or has_cpt_position:
+            self.contest_type = 'showdown'
+        else:
+            self.contest_type = 'classic'
     
     def analyze(self) -> Dict:
         """

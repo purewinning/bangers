@@ -5,6 +5,7 @@ from itertools import combinations
 import json
 from datetime import datetime
 from lineup_builder import LineupBuilder
+from showdown_builder import ShowdownLineupBuilder
 from strategy_engine import StrategyEngine
 from projection_analyzer import ProjectionAnalyzer
 
@@ -58,6 +59,12 @@ with st.sidebar:
     
     sport = st.selectbox("Sport", ["NFL", "NBA"])
     
+    contest_type = st.selectbox(
+        "Contest Type",
+        ["Classic", "Showdown"],
+        help="Classic = traditional positions (QB/RB/WR/TE/DST). Showdown = single-game with Captain"
+    )
+    
     st.subheader("Upload Projections")
     uploaded_file = st.file_uploader("DraftKings CSV", type=['csv'])
     
@@ -110,8 +117,14 @@ if uploaded_file is not None:
         with st.sidebar.expander("📋 Columns Detected"):
             st.write(", ".join(df.columns))
         
-        analyzer = ProjectionAnalyzer(df, sport)
+        analyzer = ProjectionAnalyzer(df, sport, contest_type.lower())
         analysis = analyzer.analyze()
+        
+        # Show contest type detection
+        if analyzer.contest_type == 'showdown':
+            st.info("🎯 **Showdown Contest Detected** - Captain mode enabled")
+        else:
+            st.info("📊 **Classic Contest Detected** - Traditional lineup format")
         
         # Display key metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -142,15 +155,26 @@ if uploaded_file is not None:
         if st.button("🚀 Generate Optimal Lineups", type="primary"):
             with st.spinner("Building tournament-winning lineups..."):
                 
-                builder = LineupBuilder(
-                    df=df,
-                    sport=sport,
-                    strategy=strategy,
-                    ownership_weight=ownership_weight,
-                    correlation_focus=correlation_focus,
-                    leverage_target=leverage_target,
-                    min_salary=min_salary
-                )
+                # Use appropriate builder based on contest type
+                if analyzer.contest_type == 'showdown':
+                    builder = ShowdownLineupBuilder(
+                        df=df,
+                        sport=sport,
+                        strategy=strategy,
+                        ownership_weight=ownership_weight,
+                        leverage_target=leverage_target,
+                        min_salary=min_salary
+                    )
+                else:
+                    builder = LineupBuilder(
+                        df=df,
+                        sport=sport,
+                        strategy=strategy,
+                        ownership_weight=ownership_weight,
+                        correlation_focus=correlation_focus,
+                        leverage_target=leverage_target,
+                        min_salary=min_salary
+                    )
                 
                 lineups = builder.build_lineups(num_lineups)
                 
@@ -158,14 +182,28 @@ if uploaded_file is not None:
                 st.subheader("🏆 Optimized Lineups")
                 
                 for idx, lineup in enumerate(lineups, 1):
-                    with st.expander(f"Lineup {idx} - Projection: {lineup['projection']:.2f} | Salary: ${lineup['salary']:,} | Ownership: {lineup['avg_ownership']:.1f}%", expanded=(idx==1)):
+                    lineup_title = f"Lineup {idx} - Projection: {lineup['projection']:.2f} | Salary: ${lineup['salary']:,} | Ownership: {lineup['avg_ownership']:.1f}%"
+                    if analyzer.contest_type == 'showdown':
+                        lineup_title += f" | Captain: {lineup['captain']}"
+                    
+                    with st.expander(lineup_title, expanded=(idx==1)):
                         
                         lineup_df = pd.DataFrame(lineup['players'])
                         
                         # Format the display
                         display_cols = ['Name', 'Position', 'Team', 'Salary', 'Projection', 'Ownership', 'Value', 'Leverage']
                         
-                        if sport == "NFL":
+                        # Add Role for showdown
+                        if analyzer.contest_type == 'showdown' and 'Role' in lineup_df.columns:
+                            display_cols.insert(1, 'Role')
+                        
+                        # Add optional columns if they exist
+                        optional_cols = ['Opponent', 'Optimal', 'StdDev']
+                        for col in optional_cols:
+                            if col in lineup_df.columns:
+                                display_cols.append(col)
+                        
+                        if sport == "NFL" and analyzer.contest_type != 'showdown':
                             if 'Game' in lineup_df.columns:
                                 display_cols.append('Game')
                         
