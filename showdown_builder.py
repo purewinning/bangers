@@ -28,6 +28,27 @@ class ShowdownLineupBuilder:
     
     def _preprocess_data(self):
         """Prepare showdown data for optimization"""
+        # CRITICAL FIX: Map column names FIRST
+        column_mapping = {}
+        for col in self.df.columns:
+            col_clean = str(col).strip().replace('\xa0', ' ').replace('\u00a0', ' ').strip().lower()
+            
+            if col_clean in ['ownership', 'own', 'own%', 'own %', 'ownership%', 'ownership %']:
+                column_mapping[col] = 'Ownership'
+            elif col_clean in ['cpt ownership', 'cpt ownership%', 'cpt ownership %']:
+                column_mapping[col] = 'CPT_Ownership'
+            elif col_clean in ['cpt leverage']:
+                column_mapping[col] = 'CPT_Leverage'
+            elif col_clean in ['salary', 'sal', 'price']:
+                column_mapping[col] = 'Salary'
+            elif col_clean in ['projection', 'proj', 'fpts', 'points']:
+                column_mapping[col] = 'Projection'
+            elif col_clean in ['player', 'name']:
+                column_mapping[col] = 'Name'
+        
+        if column_mapping:
+            self.df.rename(columns=column_mapping, inplace=True)
+        
         # Ensure we have CPT projections
         if 'CPT_Ownership' not in self.df.columns:
             # Create CPT versions if not provided
