@@ -68,7 +68,7 @@ class ShowdownLineupBuilder:
         used_combinations = set()
         
         attempts = 0
-        max_attempts = num_lineups * 2000
+        max_attempts = num_lineups * 5000  # Increased from 2000
         
         while len(lineups) < num_lineups and attempts < max_attempts:
             attempts += 1

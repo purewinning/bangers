@@ -4,23 +4,12 @@ import numpy as np
 from itertools import combinations
 import json
 from datetime import datetime
-import importlib
-import sys
 
-# STREAMLIT CLOUD FIX: Force reload modules to bypass cache
-if 'projection_analyzer' in sys.modules:
-    importlib.reload(sys.modules['projection_analyzer'])
-if 'lineup_builder' in sys.modules:
-    importlib.reload(sys.modules['lineup_builder'])
-if 'showdown_builder' in sys.modules:
-    importlib.reload(sys.modules['showdown_builder'])
-if 'strategy_engine' in sys.modules:
-    importlib.reload(sys.modules['strategy_engine'])
-
+# STREAMLIT CLOUD FIX: Import from projection_handler (renamed to bypass cache)
 from lineup_builder import LineupBuilder
 from showdown_builder import ShowdownLineupBuilder
 from strategy_engine import StrategyEngine
-from projection_analyzer import ProjectionAnalyzer
+from projection_handler import ProjectionAnalyzer  # Changed from projection_analyzer
 
 st.set_page_config(page_title="DK Pro Tournament Optimizer", layout="wide")
 
@@ -72,10 +61,10 @@ with st.sidebar:
     
     # Version info for debugging
     try:
-        from projection_analyzer import __version__ as pa_version
-        st.caption(f"🔧 Analyzer v{pa_version}")
+        from projection_handler import __version__ as pa_version
+        st.caption(f"🔧 Handler v{pa_version}")
     except:
-        st.caption("🔧 Analyzer v1.0")
+        st.caption("🔧 Handler v1.0")
     
     sport = st.selectbox("Sport", ["NFL", "NBA"])
     
@@ -105,7 +94,13 @@ with st.sidebar:
     
     num_lineups = st.slider("Lineups to Generate", 1, 10, 3)
     
-    min_salary = st.slider("Min Salary Used", 45000, 50000, 48000, step=100)
+    # Dynamic min_salary based on contest type
+    if contest_type == "Showdown":
+        min_salary = st.slider("Min Salary Used", 40000, 50000, 48000, step=500,
+                               help="Showdown: Aim for 48K-50K to use full salary cap")
+    else:
+        min_salary = st.slider("Min Salary Used", 45000, 50000, 48000, step=100,
+                               help="Classic: Aim for 48K+ to maximize value")
     
     ownership_weight = st.slider(
         "Ownership Consideration", 
