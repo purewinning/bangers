@@ -9,7 +9,7 @@ from datetime import datetime
 from lineup_builder import LineupBuilder
 from showdown_builder import ShowdownLineupBuilder
 from strategy_engine import StrategyEngine
-from projection_handler import ProjectionAnalyzer  # Changed from projection_analyzer
+from projection_analyzer import ProjectionAnalyzer
 
 st.set_page_config(page_title="DK Pro Tournament Optimizer", layout="wide")
 
